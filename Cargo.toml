@@ -1,0 +1,17 @@
+[package]
+name = "vector"
+version = "0.1.0"
+authors = ["nathanfaucett <nathanfaucett@gmail.com>"]
+
+keywords = ["vector", "data", "structure"]
+description = "vector data structure"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/nathanfaucett/rs-vector.git"
+homepage = "https://github.com/nathanfaucett/rs-vector"
+
+[dependencies]
+collection_traits = {git = "https://github.com/nathanfaucett/rs-collection_traits"}
+
+[dev-dependencies]
+zero = {git = "https://github.com/nathanfaucett/rs-zero"}
