@@ -1,4 +1,6 @@
 #![feature(alloc)]
+#![feature(dropck_eyepatch)]
+#![feature(inclusive_range)]
 #![no_std]
 
 

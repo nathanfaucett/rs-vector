@@ -2,7 +2,9 @@ use alloc::boxed::Box;
 use alloc::raw_vec::RawVec;
 
 use core::{ptr, slice, mem};
-use core::ops::{Deref, DerefMut, Index, IndexMut};
+use core::ops::*;
+use core::hash::{self, Hash};
+use core::cmp::Ordering;
 
 use collection_traits::*;
 
@@ -121,6 +123,81 @@ impl<T> Vector<T> {
     }
 }
 
+impl<T> Default for Vector<T> {
+    #[inline(always)]
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Drop for Vector<T> {
+    #[may_dangle]
+    #[inline(always)]
+    fn drop(&mut self) {
+        unsafe {
+            ptr::drop_in_place(&mut self[..]);
+        }
+    }
+}
+
+macro_rules! __impl_slice_eq1 {
+    ($Lhs: ty, $Rhs: ty) => {
+        __impl_slice_eq1! { $Lhs, $Rhs, Sized }
+    };
+    ($Lhs: ty, $Rhs: ty, $Bound: ident) => {
+        impl<'a, 'b, A: $Bound, B> PartialEq<$Rhs> for $Lhs where A: PartialEq<B> {
+            #[inline(always)]
+            fn eq(&self, other: &$Rhs) -> bool { self[..] == other[..] }
+            #[inline(always)]
+            fn ne(&self, other: &$Rhs) -> bool { self[..] != other[..] }
+        }
+    }
+}
+
+__impl_slice_eq1! { Vector<A>, Vector<B> }
+__impl_slice_eq1! { Vector<A>, &'b [B] }
+__impl_slice_eq1! { Vector<A>, &'b mut [B] }
+
+macro_rules! array_impls {
+    ($($N: expr)+) => {
+        $(
+            __impl_slice_eq1! { Vector<A>, [B; $N] }
+            __impl_slice_eq1! { Vector<A>, &'b [B; $N] }
+            __impl_slice_eq1! { Vector<A>, &'b mut [B; $N] }
+        )+
+    }
+}
+
+array_impls! {
+     0  1  2  3  4  5  6  7  8  9
+    10 11 12 13 14 15 16 17 18 19
+    20 21 22 23 24 25 26 27 28 29
+    30 31 32
+}
+
+impl<T: PartialOrd> PartialOrd for Vector<T> {
+    #[inline]
+    fn partial_cmp(&self, other: &Vector<T>) -> Option<Ordering> {
+        PartialOrd::partial_cmp(&**self, &**other)
+    }
+}
+
+impl<T: Eq> Eq for Vector<T> {}
+
+impl<T: Ord> Ord for Vector<T> {
+    #[inline]
+    fn cmp(&self, other: &Vector<T>) -> Ordering {
+        Ord::cmp(&**self, &**other)
+    }
+}
+
+impl<T: Hash> Hash for Vector<T> {
+    #[inline]
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        Hash::hash(&**self, state)
+    }
+}
+
 impl<T> Deref for Vector<T> {
     type Target = [T];
 
@@ -152,6 +229,92 @@ impl<T> IndexMut<usize> for Vector<T> {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut (**self)[index]
+    }
+}
+
+impl<T> Index<Range<usize>> for Vector<T> {
+    type Output = [T];
+
+    #[inline(always)]
+    fn index(&self, index: Range<usize>) -> &[T] {
+        Index::index(&**self, index)
+    }
+}
+impl<T> Index<RangeTo<usize>> for Vector<T> {
+    type Output = [T];
+
+    #[inline(always)]
+    fn index(&self, index: RangeTo<usize>) -> &[T] {
+        Index::index(&**self, index)
+    }
+}
+impl<T> Index<RangeFrom<usize>> for Vector<T> {
+    type Output = [T];
+
+    #[inline(always)]
+    fn index(&self, index: RangeFrom<usize>) -> &[T] {
+        Index::index(&**self, index)
+    }
+}
+impl<T> Index<RangeFull> for Vector<T> {
+    type Output = [T];
+
+    #[inline(always)]
+    fn index(&self, _index: RangeFull) -> &[T] {
+        self
+    }
+}
+impl<T> Index<RangeInclusive<usize>> for Vector<T> {
+    type Output = [T];
+
+    #[inline(always)]
+    fn index(&self, index: RangeInclusive<usize>) -> &[T] {
+        Index::index(&**self, index)
+    }
+}
+impl<T> Index<RangeToInclusive<usize>> for Vector<T> {
+    type Output = [T];
+
+    #[inline(always)]
+    fn index(&self, index: RangeToInclusive<usize>) -> &[T] {
+        Index::index(&**self, index)
+    }
+}
+
+impl<T> IndexMut<Range<usize>> for Vector<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, index: Range<usize>) -> &mut [T] {
+        IndexMut::index_mut(&mut **self, index)
+    }
+}
+impl<T> IndexMut<RangeTo<usize>> for Vector<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, index: RangeTo<usize>) -> &mut [T] {
+        IndexMut::index_mut(&mut **self, index)
+    }
+}
+impl<T> IndexMut<RangeFrom<usize>> for Vector<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, index: RangeFrom<usize>) -> &mut [T] {
+        IndexMut::index_mut(&mut **self, index)
+    }
+}
+impl<T> IndexMut<RangeFull> for Vector<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, _index: RangeFull) -> &mut [T] {
+        self
+    }
+}
+impl<T> IndexMut<RangeInclusive<usize>> for Vector<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, index: RangeInclusive<usize>) -> &mut [T] {
+        IndexMut::index_mut(&mut **self, index)
+    }
+}
+impl<T> IndexMut<RangeToInclusive<usize>> for Vector<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, index: RangeToInclusive<usize>) -> &mut [T] {
+        IndexMut::index_mut(&mut **self, index)
     }
 }
 
@@ -293,13 +456,13 @@ impl<T> Deque<T> for Vector<T> {
 }
 
 impl<T> Stack<T> for Vector<T> {
-    #[inline]
+    #[inline(always)]
     fn push(&mut self, element: T) { self.push_front(element) }
-    #[inline]
+    #[inline(always)]
     fn pop(&mut self) -> Option<T> { self.pop_front() }
-    #[inline]
+    #[inline(always)]
     fn top(&self) -> Option<&T> { self.front() }
-    #[inline]
+    #[inline(always)]
     fn top_mut(&mut self) -> Option<&mut T> { self.front_mut() }
 }
 

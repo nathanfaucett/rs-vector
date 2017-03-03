@@ -15,8 +15,19 @@ const SIZE: usize = 32;
 
 #[test]
 fn test_vector() {
-    let a = Vector::<usize>::new();
-    assert!(a.is_empty());
+    let mut v = Vector::<usize>::new();
+
+    for i in 0..SIZE {
+        v.push(i);
+    }
+    for i in 0..SIZE {
+        assert_eq!(v.get(i).unwrap(), &i);
+    }
+    while !v.is_empty() {
+        v.pop();
+    }
+
+    assert!(v.is_empty());
 }
 
 fn sum<'a, A, B>(array: &'a A) -> B
