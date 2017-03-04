@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use alloc::raw_vec::RawVec;
 
-use core::{ptr, slice, mem};
+use core::{fmt, ptr, slice, mem};
 use core::ops::*;
 use core::hash::{self, Hash};
 use core::cmp::Ordering;
@@ -214,6 +214,12 @@ impl<T> DerefMut for Vector<T> {
         unsafe {
             slice::from_raw_parts_mut(self.raw.ptr(), self.len)
         }
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for Vector<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&**self, f)
     }
 }
 
