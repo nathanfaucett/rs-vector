@@ -226,13 +226,17 @@ impl<T: fmt::Debug> fmt::Debug for Vector<T> {
 impl<T: Clone> Clone for Vector<T> {
     #[inline]
     fn clone(&self) -> Self {
-        let len = self.len;
-        let mut cloned = Vector::with_capacity(len);
+        let cap = self.raw.cap();
+        let new_raw = RawVec::with_capacity(cap);
+
         unsafe {
-            cloned.set_len(len);
-            ptr::copy(self.raw.ptr(), cloned.raw.ptr(), len);
+            ptr::copy_nonoverlapping(self.raw.ptr(), new_raw.ptr(), cap);
         }
-        cloned
+
+        Vector {
+            raw: new_raw,
+            len: self.len,
+        }
     }
 }
 

@@ -30,6 +30,20 @@ fn test_vector() {
     assert!(v.is_empty());
 }
 
+#[test]
+fn test_clone() {
+    let mut a = Vector::new();
+    a.push(1);
+    a.push(2);
+    let mut b = a.clone();
+    a.push(3);
+    b.push(0);
+    assert_ne!(a, b);
+    a.pop();
+    b.pop();
+    assert_eq!(a, b);
+}
+
 fn sum<'a, A, B>(array: &'a A) -> B
     where A: 'a + Seq<'a, B>,
           B: 'a + Copy + Zero + AddAssign<B>,

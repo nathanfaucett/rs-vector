@@ -45,3 +45,28 @@ fn bench_std_vector(b: &mut Bencher) {
         v
     });
 }
+
+#[bench]
+fn bench_vector_clone(b: &mut Bencher) {
+    use vector::Vector;
+
+    b.iter(|| {
+        let mut v = Vector::<usize>::new();
+        for i in 0..SIZE {
+            v.push(i);
+        }
+        v.clone()
+    });
+}
+#[bench]
+fn bench_std_vector_clone(b: &mut Bencher) {
+    use std::vec::Vec;
+
+    b.iter(|| {
+        let mut v = Vec::<usize>::new();
+        for i in 0..SIZE {
+            v.push(i);
+        }
+        v.clone()
+    });
+}
