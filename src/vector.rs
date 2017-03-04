@@ -223,6 +223,19 @@ impl<T: fmt::Debug> fmt::Debug for Vector<T> {
     }
 }
 
+impl<T: Clone> Clone for Vector<T> {
+    #[inline]
+    fn clone(&self) -> Self {
+        let len = self.len;
+        let mut cloned = Vector::with_capacity(len);
+        unsafe {
+            cloned.set_len(len);
+            ptr::copy(self.raw.ptr(), cloned.raw.ptr(), len);
+        }
+        cloned
+    }
+}
+
 impl<T> Index<usize> for Vector<T> {
     type Output = T;
 
