@@ -1,10 +1,17 @@
 use alloc::boxed::Box;
 use alloc::raw_vec::RawVec;
+use alloc::heap::EMPTY;
+
+use collections::Bound;
+use collections::range::RangeArgument;
 
 use core::{fmt, ptr, slice, mem};
 use core::ops::*;
+use core::ptr::Shared;
 use core::hash::{self, Hash};
 use core::cmp::Ordering;
+use core::iter::{TrustedLen, FusedIterator, FromIterator};
+use core::intrinsics::{assume, arith_offset};
 
 use collection_traits::*;
 
@@ -121,6 +128,36 @@ impl<T> Vector<T> {
             other.set_len(0);
         }
     }
+    #[inline]
+    pub fn drain<R>(&mut self, range: R) -> Drain<T>
+        where R: RangeArgument<usize>
+    {
+        let len = self.len();
+        let start = match range.start() {
+            Bound::Included(x) => *x,
+            Bound::Excluded(x) => *x,
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end() {
+            Bound::Included(x) => *x,
+            Bound::Excluded(x) => *x,
+            Bound::Unbounded => len,
+        };
+        assert!(start <= end);
+        assert!(end <= len);
+
+        unsafe {
+            self.set_len(start);
+            let range_slice = slice::from_raw_parts_mut(self.as_mut_ptr().offset(start as isize),
+                                                        end - start);
+            Drain {
+                tail_start: end,
+                tail_len: len - end,
+                iter: range_slice.iter(),
+                vec: Shared::new(self as *mut _),
+            }
+        }
+    }
 }
 
 impl<T> Default for Vector<T> {
@@ -131,7 +168,6 @@ impl<T> Default for Vector<T> {
 }
 
 impl<T> Drop for Vector<T> {
-    #[may_dangle]
     #[inline(always)]
     fn drop(&mut self) {
         unsafe {
@@ -520,3 +556,416 @@ impl<'a, T: 'a> IterableMut<'a, &'a mut T> for Vector<T> {
 
 impl<'a, T: 'a> Seq<'a, T> for Vector<T> {}
 impl<'a, T: 'a> SeqMut<'a, T> for Vector<T> {}
+
+
+impl<T> FromIterator<T> for Vector<T> {
+    #[inline]
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Vector<T> {
+        <Self as SpecExtend<_, _>>::from_iter(iter.into_iter())
+    }
+}
+
+impl<T> IntoIterator for Vector<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    #[inline]
+    fn into_iter(mut self) -> IntoIter<T> {
+        unsafe {
+            let begin = self.as_mut_ptr();
+            assume(!begin.is_null());
+            let end = if mem::size_of::<T>() == 0 {
+                arith_offset(begin as *const i8, self.len() as isize) as *const T
+            } else {
+                begin.offset(self.len() as isize) as *const T
+            };
+            let cap = self.raw.cap();
+            mem::forget(self);
+            IntoIter {
+                raw: Shared::new(begin),
+                cap: cap,
+                ptr: begin,
+                end: end,
+            }
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Vector<T> {
+    type Item = &'a T;
+    type IntoIter = slice::Iter<'a, T>;
+
+    fn into_iter(self) -> slice::Iter<'a, T> {
+        self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut Vector<T> {
+    type Item = &'a mut T;
+    type IntoIter = slice::IterMut<'a, T>;
+
+    fn into_iter(mut self) -> slice::IterMut<'a, T> {
+        self.iter_mut()
+    }
+}
+
+impl<T> Extend<T> for Vector<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        self.spec_extend(iter.into_iter())
+    }
+}
+
+trait SpecExtend<T, I> {
+    fn from_iter(iter: I) -> Self;
+    fn spec_extend(&mut self, iter: I);
+}
+
+impl<T, I> SpecExtend<T, I> for Vector<T>
+    where I: Iterator<Item=T>,
+{
+    default fn from_iter(mut iterator: I) -> Self {
+        let mut vector = match iterator.next() {
+            None => return Vector::new(),
+            Some(element) => {
+                let (lower, _) = iterator.size_hint();
+                let mut vector = Vector::with_capacity(lower.saturating_add(1));
+                unsafe {
+                    ptr::write(vector.get_unchecked_mut(0), element);
+                    vector.set_len(1);
+                }
+                vector
+            }
+        };
+        vector.spec_extend(iterator);
+        vector
+    }
+
+    default fn spec_extend(&mut self, iter: I) {
+        self.extend_desugared(iter)
+    }
+}
+
+struct SetLenOnDrop<'a> {
+    len: &'a mut usize,
+    local_len: usize,
+}
+
+impl<'a> SetLenOnDrop<'a> {
+    #[inline]
+    fn new(len: &'a mut usize) -> Self {
+        SetLenOnDrop { local_len: *len, len: len }
+    }
+    #[inline]
+    fn increment_len(&mut self, increment: usize) {
+        self.local_len += increment;
+    }
+}
+
+impl<'a> Drop for SetLenOnDrop<'a> {
+    #[inline]
+    fn drop(&mut self) {
+        *self.len = self.local_len;
+    }
+}
+
+impl<T, I> SpecExtend<T, I> for Vector<T>
+    where I: TrustedLen<Item=T>,
+{
+    fn from_iter(iterator: I) -> Self {
+        let mut vector = Vector::new();
+        vector.spec_extend(iterator);
+        vector
+    }
+
+    fn spec_extend(&mut self, iterator: I) {
+        let (low, high) = iterator.size_hint();
+        if let Some(high_value) = high {
+            debug_assert_eq!(low, high_value,
+                             "TrustedLen iterator's size hint is not exact: {:?}",
+                             (low, high));
+        }
+        if let Some(additional) = high {
+            self.reserve(additional);
+            unsafe {
+                let mut ptr = self.as_mut_ptr().offset(self.len() as isize);
+                let mut local_len = SetLenOnDrop::new(&mut self.len);
+                for element in iterator {
+                    ptr::write(ptr, element);
+                    ptr = ptr.offset(1);
+                    local_len.increment_len(1);
+                }
+            }
+        } else {
+            self.extend_desugared(iterator)
+        }
+    }
+}
+
+impl<'a, T: 'a, I> SpecExtend<&'a T, I> for Vector<T>
+    where I: Iterator<Item=&'a T>,
+          T: Clone,
+{
+    default fn from_iter(iterator: I) -> Self {
+        SpecExtend::from_iter(iterator.cloned())
+    }
+
+    default fn spec_extend(&mut self, iterator: I) {
+        self.spec_extend(iterator.cloned())
+    }
+}
+
+impl<'a, T: 'a> SpecExtend<&'a T, slice::Iter<'a, T>> for Vector<T>
+    where T: Copy,
+{
+    fn spec_extend(&mut self, iterator: slice::Iter<'a, T>) {
+        let slice = iterator.as_slice();
+        self.reserve(slice.len());
+        unsafe {
+            let len = self.len();
+            self.set_len(len + slice.len());
+            self.get_unchecked_mut(len..).copy_from_slice(slice);
+        }
+    }
+}
+
+impl<T> Vector<T> {
+    fn extend_desugared<I: Iterator<Item = T>>(&mut self, mut iterator: I) {
+        while let Some(element) = iterator.next() {
+            let len = self.len();
+            if len == self.capacity() {
+                let (lower, _) = iterator.size_hint();
+                self.reserve(lower.saturating_add(1));
+            }
+            unsafe {
+                ptr::write(self.get_unchecked_mut(len), element);
+                self.set_len(len + 1);
+            }
+        }
+    }
+}
+
+impl<'a, T: 'a + Copy> Extend<&'a T> for Vector<T> {
+    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
+        self.spec_extend(iter.into_iter())
+    }
+}
+
+impl<T> AsRef<Vector<T>> for Vector<T> {
+    fn as_ref(&self) -> &Vector<T> {
+        self
+    }
+}
+
+impl<T> AsMut<Vector<T>> for Vector<T> {
+    fn as_mut(&mut self) -> &mut Vector<T> {
+        self
+    }
+}
+
+impl<T> AsRef<[T]> for Vector<T> {
+    fn as_ref(&self) -> &[T] {
+        self
+    }
+}
+
+impl<T> AsMut<[T]> for Vector<T> {
+    fn as_mut(&mut self) -> &mut [T] {
+        self
+    }
+}
+
+impl<'a, T: Clone> From<&'a [T]> for Vector<T> {
+    fn from(s: &'a [T]) -> Vector<T> {
+        unsafe {
+            let len = s.len();
+            let raw = RawVec::with_capacity(len.next_power_of_two());
+            ptr::copy_nonoverlapping(s.as_ptr(), raw.ptr(), len);
+
+            Vector {
+                raw: raw,
+                len: len,
+            }
+        }
+    }
+}
+
+impl<'a> From<&'a str> for Vector<u8> {
+    fn from(s: &'a str) -> Vector<u8> {
+        From::from(s.as_bytes())
+    }
+}
+
+pub struct IntoIter<T> {
+    raw: Shared<T>,
+    cap: usize,
+    ptr: *const T,
+    end: *const T,
+}
+
+impl<T: fmt::Debug> fmt::Debug for IntoIter<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("IntoIter")
+            .field(&self.as_slice())
+            .finish()
+    }
+}
+
+impl<T> IntoIter<T> {
+    pub fn as_slice(&self) -> &[T] {
+        unsafe {
+            slice::from_raw_parts(self.ptr, self.len())
+        }
+    }
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        unsafe {
+            slice::from_raw_parts_mut(self.ptr as *mut T, self.len())
+        }
+    }
+}
+
+unsafe impl<T: Send> Send for IntoIter<T> {}
+unsafe impl<T: Sync> Sync for IntoIter<T> {}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        unsafe {
+            if self.ptr as *const _ == self.end {
+                None
+            } else {
+                if mem::size_of::<T>() == 0 {
+                    self.ptr = arith_offset(self.ptr as *const i8, 1) as *mut T;
+                    Some(ptr::read(EMPTY as *mut T))
+                } else {
+                    let old = self.ptr;
+                    self.ptr = self.ptr.offset(1);
+
+                    Some(ptr::read(old))
+                }
+            }
+        }
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let diff = (self.end as usize) - (self.ptr as usize);
+        let size = mem::size_of::<T>();
+        let exact = diff /
+                    (if size == 0 {
+                         1
+                     } else {
+                         size
+                     });
+        (exact, Some(exact))
+    }
+    #[inline(always)]
+    fn count(self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<T> {
+        unsafe {
+            if self.end == self.ptr {
+                None
+            } else {
+                if mem::size_of::<T>() == 0 {
+                    self.end = arith_offset(self.end as *const i8, -1) as *mut T;
+                    Some(ptr::read(EMPTY as *mut T))
+                } else {
+                    self.end = self.end.offset(-1);
+
+                    Some(ptr::read(self.end))
+                }
+            }
+        }
+    }
+}
+
+impl<T> ExactSizeIterator for IntoIter<T> {
+    fn is_empty(&self) -> bool {
+        self.ptr == self.end
+    }
+}
+
+impl<T> FusedIterator for IntoIter<T> {}
+
+unsafe impl<T> TrustedLen for IntoIter<T> {}
+
+impl<T: Clone> Clone for IntoIter<T> {
+    fn clone(&self) -> IntoIter<T> {
+        IntoIter {
+            raw: self.raw,
+            cap: self.cap,
+            ptr: self.ptr,
+            end: self.end,
+        }
+    }
+}
+
+impl<T> Drop for IntoIter<T> {
+    fn drop(&mut self) {
+        for _x in self.by_ref() {}
+        let _ = unsafe { RawVec::from_raw_parts(*self.raw, self.cap) };
+    }
+}
+
+pub struct Drain<'a, T: 'a> {
+    tail_start: usize,
+    tail_len: usize,
+    iter: slice::Iter<'a, T>,
+    vec: Shared<Vector<T>>,
+}
+
+unsafe impl<'a, T: Sync> Sync for Drain<'a, T> {}
+unsafe impl<'a, T: Send> Send for Drain<'a, T> {}
+
+impl<'a, T> Iterator for Drain<'a, T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        self.iter.next().map(|elt| unsafe { ptr::read(elt as *const _) })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.iter.size_hint()
+    }
+}
+
+impl<'a, T> DoubleEndedIterator for Drain<'a, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<T> {
+        self.iter.next_back().map(|elt| unsafe { ptr::read(elt as *const _) })
+    }
+}
+
+impl<'a, T> Drop for Drain<'a, T> {
+    fn drop(&mut self) {
+        while let Some(_) = self.next() {}
+
+        if self.tail_len > 0 {
+            unsafe {
+                let source_vec = &mut **self.vec;
+                let start = source_vec.len();
+                let tail = self.tail_start;
+                let src = source_vec.as_ptr().offset(tail as isize);
+                let dst = source_vec.as_mut_ptr().offset(start as isize);
+                ptr::copy(src, dst, self.tail_len);
+                source_vec.set_len(start + self.tail_len);
+            }
+        }
+    }
+}
+
+impl<'a, T> ExactSizeIterator for Drain<'a, T> {
+    fn is_empty(&self) -> bool {
+        self.iter.is_empty()
+    }
+}
+
+impl<'a, T> FusedIterator for Drain<'a, T> {}
