@@ -158,6 +158,25 @@ impl<T> Vector<T> {
             }
         }
     }
+    #[inline]
+    pub fn split_off(&mut self, at: usize) -> Self {
+        assert!(at <= self.len(), "`at` out of bounds");
+
+        let other_len = self.len - at;
+        let mut other = Vector::with_capacity(other_len);
+
+        unsafe {
+            self.set_len(at);
+            other.set_len(other_len);
+
+            ptr::copy_nonoverlapping(
+                self.as_ptr().offset(at as isize),
+                other.as_mut_ptr(),
+                other.len()
+            );
+        }
+        other
+    }
 }
 
 impl<T> Default for Vector<T> {
