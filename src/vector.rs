@@ -179,6 +179,39 @@ impl<T> Vector<T> {
     }
 }
 
+impl<T: Clone> Vector<T> {
+    #[inline]
+    pub fn resize(&mut self, new_len: usize, value: T) {
+        let len = self.len();
+
+        if new_len > len {
+            self.extend_with_element(new_len - len, value);
+        } else {
+            self.truncate(new_len);
+        }
+    }
+    #[inline]
+    fn extend_with_element(&mut self, n: usize, value: T) {
+        self.reserve(n);
+
+        unsafe {
+            let mut ptr = self.as_mut_ptr().offset(self.len() as isize);
+            let mut local_len = SetLenOnDrop::new(&mut self.len);
+
+            for _ in 1..n {
+                ptr::write(ptr, value.clone());
+                ptr = ptr.offset(1);
+                local_len.increment_len(1);
+            }
+
+            if n > 0 {
+                ptr::write(ptr, value);
+                local_len.increment_len(1);
+            }
+        }
+    }
+}
+
 impl<T> Default for Vector<T> {
     #[inline(always)]
     fn default() -> Self {
@@ -988,3 +1021,11 @@ impl<'a, T> ExactSizeIterator for Drain<'a, T> {
 }
 
 impl<'a, T> FusedIterator for Drain<'a, T> {}
+
+
+#[inline]
+pub fn from_elem<T: Clone>(elem: T, n: usize) -> Vector<T> {
+    let mut v = Vector::with_capacity(n);
+    v.extend_with_element(n, elem);
+    v
+}
