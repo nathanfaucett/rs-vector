@@ -9,7 +9,6 @@
 #![feature(core_intrinsics)]
 #![feature(exact_size_is_empty)]
 #![feature(collections_range)]
-#![feature(collections_bound)]
 #![feature(box_syntax)]
 #![no_std]
 

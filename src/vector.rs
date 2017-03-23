@@ -962,7 +962,7 @@ impl<T: Clone> Clone for IntoIter<T> {
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
         for _x in self.by_ref() {}
-        let _ = unsafe { RawVec::from_raw_parts(*self.raw, self.cap) };
+        let _ = unsafe { RawVec::from_raw_parts(*self.raw as *mut T, self.cap) };
     }
 }
 
@@ -1002,7 +1002,7 @@ impl<'a, T> Drop for Drain<'a, T> {
 
         if self.tail_len > 0 {
             unsafe {
-                let source_vec = &mut **self.vec;
+                let source_vec = &mut *(*self.vec as *mut Vector<T>);
                 let start = source_vec.len();
                 let tail = self.tail_start;
                 let src = source_vec.as_ptr().offset(tail as isize);
