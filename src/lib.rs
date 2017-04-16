@@ -1,6 +1,7 @@
 #![feature(alloc)]
 #![feature(collections)]
 #![feature(inclusive_range)]
+#![feature(collections_bound)]
 #![feature(specialization)]
 #![feature(heap_api)]
 #![feature(shared)]
