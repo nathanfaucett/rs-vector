@@ -889,7 +889,7 @@ impl<T> Iterator for IntoIter<T> {
             } else {
                 if mem::size_of::<T>() == 0 {
                     self.ptr = arith_offset(self.ptr as *const i8, 1) as *mut T;
-                    Some(ptr::read(Shared::empty().as_ptr() as *mut T))
+                    Some(ptr::read(Shared::empty().as_ptr()))
                 } else {
                     let old = self.ptr;
                     self.ptr = self.ptr.offset(1);
