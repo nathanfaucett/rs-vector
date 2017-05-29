@@ -1,0 +1,21 @@
+[root]
+name = "vector"
+version = "0.1.0"
+dependencies = [
+ "collection_traits 0.1.0 (git+https://github.com/nathanfaucett/rs-collection_traits)",
+ "zero 0.1.0 (git+https://github.com/nathanfaucett/rs-zero)",
+]
+
+[[package]]
+name = "collection_traits"
+version = "0.1.0"
+source = "git+https://github.com/nathanfaucett/rs-collection_traits#e29b61b46e8fb805aa20df333acbe9036f3f7fa3"
+
+[[package]]
+name = "zero"
+version = "0.1.0"
+source = "git+https://github.com/nathanfaucett/rs-zero#414beceb348ab6dc1b1b7d1a433c887731510d67"
+
+[metadata]
+"checksum collection_traits 0.1.0 (git+https://github.com/nathanfaucett/rs-collection_traits)" = "<none>"
+"checksum zero 0.1.0 (git+https://github.com/nathanfaucett/rs-zero)" = "<none>"
