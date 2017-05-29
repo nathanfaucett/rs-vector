@@ -1,7 +1,6 @@
 #![feature(alloc)]
 #![feature(collections)]
 #![feature(inclusive_range)]
-#![feature(collections_bound)]
 #![feature(specialization)]
 #![feature(shared)]
 #![feature(trusted_len)]
