@@ -1,6 +1,5 @@
 use alloc::boxed::Box;
 use alloc::raw_vec::RawVec;
-use alloc::heap::EMPTY;
 
 use collections::Bound;
 use collections::range::RangeArgument;
@@ -148,7 +147,7 @@ impl<T> Vector<T> {
 
         unsafe {
             self.set_len(start);
-            let range_slice = slice::from_raw_parts_mut(self.as_mut_ptr().offset(start as isize),
+            let range_slice = slice::from_raw_parts_mut((self.as_ptr() as *mut _).offset(start as isize),
                                                         end - start);
             Drain {
                 tail_start: end,
@@ -171,7 +170,7 @@ impl<T> Vector<T> {
 
             ptr::copy_nonoverlapping(
                 self.as_ptr().offset(at as isize),
-                other.as_mut_ptr(),
+                other.as_ptr() as *mut _,
                 other.len()
             );
         }
@@ -195,7 +194,7 @@ impl<T: Clone> Vector<T> {
         self.reserve(n);
 
         unsafe {
-            let mut ptr = self.as_mut_ptr().offset(self.len() as isize);
+            let mut ptr = (self.as_ptr() as *mut _).offset(self.len() as isize);
             let mut local_len = SetLenOnDrop::new(&mut self.len);
 
             for _ in 1..n {
@@ -452,7 +451,7 @@ impl<T> Insert<usize, T> for Vector<T> {
 
         unsafe {
             {
-                let p = self.as_mut_ptr().offset(index as isize);
+                let p = (self.as_ptr() as *mut _).offset(index as isize);
                 ptr::copy(p, p.offset(1), len - index);
                 ptr::write(p, element);
             }
@@ -471,7 +470,7 @@ impl<T> Remove<usize> for Vector<T> {
         unsafe {
             let ret;
             {
-                let ptr = self.as_mut_ptr().offset(index as isize);
+                let ptr = (self.as_ptr() as *mut _).offset(index as isize);
                 ret = ptr::read(ptr);
                 ptr::copy(ptr.offset(1), ptr, len - index - 1);
             }
@@ -488,7 +487,7 @@ impl<T> Deque<T> for Vector<T> {
             self.raw.double();
         }
         unsafe {
-            let end = self.as_mut_ptr().offset(self.len as isize);
+            let end = (self.as_ptr() as *mut _).offset(self.len as isize);
             ptr::write(end, element);
             self.len += 1;
         }
@@ -622,9 +621,9 @@ impl<T> IntoIterator for Vector<T> {
     type IntoIter = IntoIter<T>;
 
     #[inline]
-    fn into_iter(mut self) -> IntoIter<T> {
+    fn into_iter(self) -> IntoIter<T> {
         unsafe {
-            let begin = self.as_mut_ptr();
+            let begin = self.as_ptr() as *mut _;
             assume(!begin.is_null());
             let end = if mem::size_of::<T>() == 0 {
                 arith_offset(begin as *const i8, self.len() as isize) as *const T
@@ -740,7 +739,7 @@ impl<T, I> SpecExtend<T, I> for Vector<T>
         if let Some(additional) = high {
             self.reserve(additional);
             unsafe {
-                let mut ptr = self.as_mut_ptr().offset(self.len() as isize);
+                let mut ptr = (self.as_ptr() as *mut _).offset(self.len() as isize);
                 let mut local_len = SetLenOnDrop::new(&mut self.len);
                 for element in iterator {
                     ptr::write(ptr, element);
@@ -890,7 +889,7 @@ impl<T> Iterator for IntoIter<T> {
             } else {
                 if mem::size_of::<T>() == 0 {
                     self.ptr = arith_offset(self.ptr as *const i8, 1) as *mut T;
-                    Some(ptr::read(EMPTY as *mut T))
+                    Some(ptr::read(Shared::empty().as_ptr() as *mut T))
                 } else {
                     let old = self.ptr;
                     self.ptr = self.ptr.offset(1);
@@ -927,7 +926,7 @@ impl<T> DoubleEndedIterator for IntoIter<T> {
             } else {
                 if mem::size_of::<T>() == 0 {
                     self.end = arith_offset(self.end as *const i8, -1) as *mut T;
-                    Some(ptr::read(EMPTY as *mut T))
+                    Some(ptr::read(Shared::empty().as_ptr() as *mut T))
                 } else {
                     self.end = self.end.offset(-1);
 
@@ -962,7 +961,9 @@ impl<T: Clone> Clone for IntoIter<T> {
 impl<T> Drop for IntoIter<T> {
     fn drop(&mut self) {
         for _x in self.by_ref() {}
-        let _ = unsafe { RawVec::from_raw_parts(*self.raw as *mut T, self.cap) };
+        let _ = unsafe {
+            RawVec::from_raw_parts(self.raw.as_ptr(), self.cap)
+        };
     }
 }
 
@@ -1002,11 +1003,11 @@ impl<'a, T> Drop for Drain<'a, T> {
 
         if self.tail_len > 0 {
             unsafe {
-                let source_vec = &mut *(*self.vec as *mut Vector<T>);
+                let source_vec = &mut *(self.vec.as_ptr());
                 let start = source_vec.len();
                 let tail = self.tail_start;
                 let src = source_vec.as_ptr().offset(tail as isize);
-                let dst = source_vec.as_mut_ptr().offset(start as isize);
+                let dst = (source_vec.as_ptr() as *mut _).offset(start as isize);
                 ptr::copy(src, dst, self.tail_len);
                 source_vec.set_len(start + self.tail_len);
             }

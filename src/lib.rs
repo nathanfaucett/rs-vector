@@ -2,7 +2,6 @@
 #![feature(collections)]
 #![feature(inclusive_range)]
 #![feature(specialization)]
-#![feature(heap_api)]
 #![feature(shared)]
 #![feature(trusted_len)]
 #![feature(fused)]
