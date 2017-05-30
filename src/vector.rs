@@ -428,7 +428,7 @@ impl<T> IndexMut<RangeToInclusive<usize>> for Vector<T> {
     }
 }
 
-impl<T> Collection for Vector<T> {
+impl<T> CollectionMut for Vector<T> {
     #[inline(always)]
     fn len(&self) -> usize { self.len }
     #[inline(always)]
@@ -437,7 +437,7 @@ impl<T> Collection for Vector<T> {
     }
 }
 
-impl<T> Insert<usize, T> for Vector<T> {
+impl<T> InsertMut<usize, T> for Vector<T> {
     type Output = ();
 
     #[inline]
@@ -460,7 +460,7 @@ impl<T> Insert<usize, T> for Vector<T> {
     }
 }
 
-impl<T> Remove<usize> for Vector<T> {
+impl<T> RemoveMut<usize> for Vector<T> {
     type Output = T;
 
     #[inline]
@@ -480,7 +480,7 @@ impl<T> Remove<usize> for Vector<T> {
     }
 }
 
-impl<T> Deque<T> for Vector<T> {
+impl<T> DequeMut<T> for Vector<T> {
     #[inline]
     fn push_front(&mut self, element: T) {
         if self.len == self.raw.cap() {
@@ -565,7 +565,7 @@ impl<T> Deque<T> for Vector<T> {
     }
 }
 
-impl<T> Stack<T> for Vector<T> {
+impl<T> StackMut<T> for Vector<T> {
     #[inline(always)]
     fn push(&mut self, element: T) { self.push_front(element) }
     #[inline(always)]
@@ -576,7 +576,7 @@ impl<T> Stack<T> for Vector<T> {
     fn top_mut(&mut self) -> Option<&mut T> { self.front_mut() }
 }
 
-impl<T> Queue<T> for Vector<T> {
+impl<T> QueueMut<T> for Vector<T> {
     #[inline(always)]
     fn enqueue(&mut self, element: T) { self.push_back(element) }
     #[inline(always)]
@@ -605,7 +605,6 @@ impl<'a, T: 'a> IterableMut<'a, &'a mut T> for Vector<T> {
     }
 }
 
-impl<'a, T: 'a> Seq<'a, T> for Vector<T> {}
 impl<'a, T: 'a> SeqMut<'a, T> for Vector<T> {}
 
 

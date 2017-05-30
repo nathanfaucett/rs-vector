@@ -67,7 +67,7 @@ fn test_clone() {
 }
 
 fn sum<'a, A, B>(array: &'a A) -> B
-    where A: 'a + Seq<'a, B>,
+    where A: 'a + SeqMut<'a, B>,
           B: 'a + Copy + Zero + AddAssign<B>,
 {
     let mut out = B::zero();
