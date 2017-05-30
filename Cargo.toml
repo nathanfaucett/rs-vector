@@ -11,7 +11,7 @@ repository = "https://github.com/nathanfaucett/rs-vector.git"
 homepage = "https://github.com/nathanfaucett/rs-vector"
 
 [dependencies]
-collection_traits = {git = "https://github.com/nathanfaucett/rs-collection_traits"}
+collection_traits = {git = "https://github.com/nathanfaucett/rs-collection_traits", features=["no_std"]}
 
 [dev-dependencies]
 zero = {git = "https://github.com/nathanfaucett/rs-zero"}
