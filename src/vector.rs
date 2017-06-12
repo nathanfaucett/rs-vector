@@ -428,9 +428,12 @@ impl<T> IndexMut<RangeToInclusive<usize>> for Vector<T> {
     }
 }
 
-impl<T> CollectionMut for Vector<T> {
+impl<T> Collection for Vector<T> {
     #[inline(always)]
     fn len(&self) -> usize { self.len }
+}
+
+impl<T> CollectionMut for Vector<T> {
     #[inline(always)]
     fn clear(&mut self) {
         self.truncate(0)
