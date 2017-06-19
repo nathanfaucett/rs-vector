@@ -1,8 +1,7 @@
+use alloc::Bound;
 use alloc::boxed::Box;
 use alloc::raw_vec::RawVec;
-
-use collections::Bound;
-use collections::range::RangeArgument;
+use alloc::range::RangeArgument;
 
 use core::{fmt, ptr, slice, mem};
 use core::ops::*;

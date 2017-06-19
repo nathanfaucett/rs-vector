@@ -1,5 +1,4 @@
 #![feature(alloc)]
-#![feature(collections)]
 #![feature(inclusive_range)]
 #![feature(specialization)]
 #![feature(shared)]
@@ -13,7 +12,6 @@
 
 
 pub extern crate alloc;
-extern crate collections;
 
 extern crate collection_traits;
 
